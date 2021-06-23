@@ -73,6 +73,10 @@
 #include "../usermods/EleksTube_IPS/usermod_elekstube_ips.h"
 #endif
 
+#ifdef USERMOD_ROTARY_CONTROL
+#include "../usermods/rotary_control/usermod_rotary_control.h"
+#endif
+
 void registerUsermods()
 {
 /*
@@ -141,5 +145,9 @@ void registerUsermods()
 
   #ifdef USERMOD_ELEKSTUBE_IPS
   usermods.add(new ElekstubeIPSUsermod());
+  #endif
+
+  #ifdef USERMOD_ROTARY_CONTROL
+  usermods.add(new RotaryControl());
   #endif
 }
