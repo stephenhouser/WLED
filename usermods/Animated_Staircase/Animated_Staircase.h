@@ -111,19 +111,19 @@ class Animated_Staircase : public Usermod {
         }
 
         if (i >= onIndex && i < offIndex) {
-          segments->setOption(SEG_OPTION_ON, 1, 1);
+          segments->setOption(SEG_OPTION_ON, 1, i);
 
           // We may need to copy mode and colors from segment 0 to make sure
           // changes are propagated even when the config is changed during a wipe
           // segments->mode = mainsegment.mode;
           // segments->colors[0] = mainsegment.colors[0];
         } else {
-          segments->setOption(SEG_OPTION_ON, 0, 1);
+          segments->setOption(SEG_OPTION_ON, 0, i);
         }
         // Always mark segments as "transitional", we are animating the staircase
-        segments->setOption(SEG_OPTION_TRANSITIONAL, 1, 1);
+        segments->setOption(SEG_OPTION_TRANSITIONAL, 1, i);
       }
-      colorUpdated(NOTIFIER_CALL_MODE_DIRECT_CHANGE);
+      colorUpdated(CALL_MODE_DIRECT_CHANGE);
     }
 
     /*
@@ -296,9 +296,9 @@ class Animated_Staircase : public Usermod {
             maxSegmentId = i - 1;
             break;
           }
-          segments->setOption(SEG_OPTION_ON, 1, 1);
+          segments->setOption(SEG_OPTION_ON, 1, i);
         }
-        colorUpdated(NOTIFIER_CALL_MODE_DIRECT_CHANGE);
+        colorUpdated(CALL_MODE_DIRECT_CHANGE);
         DEBUG_PRINTLN(F("Animated Staircase disabled."));
       }
       enabled = enable;
@@ -306,22 +306,26 @@ class Animated_Staircase : public Usermod {
 
   public:
     void setup() {
+      // standardize invalid pin numbers to -1
+      if (topPIRorTriggerPin    < 0) topPIRorTriggerPin    = -1;
+      if (topEchoPin            < 0) topEchoPin            = -1;
+      if (bottomPIRorTriggerPin < 0) bottomPIRorTriggerPin = -1;
+      if (bottomEchoPin         < 0) bottomEchoPin         = -1;
       // allocate pins
-      if (topPIRorTriggerPin >= 0) {
-        if (!pinManager.allocatePin(topPIRorTriggerPin,useUSSensorTop))
-          topPIRorTriggerPin = -1;
-      }
-      if (topEchoPin >= 0) {
-        if (!pinManager.allocatePin(topEchoPin,false))
-          topEchoPin = -1;
-      }
-      if (bottomPIRorTriggerPin >= 0) {
-        if (!pinManager.allocatePin(bottomPIRorTriggerPin,useUSSensorBottom))
-          bottomPIRorTriggerPin = -1;
-      }
-      if (bottomEchoPin >= 0) {
-        if (!pinManager.allocatePin(bottomEchoPin,false))
-          bottomEchoPin = -1;
+      PinManagerPinType pins[4] = {
+        { topPIRorTriggerPin, useUSSensorTop },
+        { topEchoPin, false },
+        { bottomPIRorTriggerPin, useUSSensorBottom },
+        { bottomEchoPin, false },
+      };
+      // NOTE: this *WILL* return TRUE if all the pins are set to -1.
+      //       this is *BY DESIGN*.
+      if (!pinManager.allocateMultiplePins(pins, 4, PinOwner::UM_AnimatedStaircase)) {
+        topPIRorTriggerPin = -1;
+        topEchoPin = -1;
+        bottomPIRorTriggerPin = -1;
+        bottomEchoPin = -1;
+        enabled = false;
       }
       enable(enabled);
       initDone = true;
@@ -426,8 +430,10 @@ class Animated_Staircase : public Usermod {
 
     /*
     * Reads the configuration to internal flash memory before setup() is called.
+    * 
+    * The function should return true if configuration was successfully loaded or false if there was no configuration.
     */
-    void readFromConfig(JsonObject& root) {
+    bool readFromConfig(JsonObject& root) {
       bool oldUseUSSensorTop = useUSSensorTop;
       bool oldUseUSSensorBottom = useUSSensorBottom;
       int8_t oldTopAPin = topPIRorTriggerPin;
@@ -435,46 +441,41 @@ class Animated_Staircase : public Usermod {
       int8_t oldBottomAPin = bottomPIRorTriggerPin;
       int8_t oldBottomBPin = bottomEchoPin;
 
-      JsonObject staircase = root[FPSTR(_name)];
-      if (!staircase.isNull()) {
-        if (staircase[FPSTR(_enabled)].is<bool>()) {
-          enabled   = staircase[FPSTR(_enabled)].as<bool>();
-        } else {
-          String str = staircase[FPSTR(_enabled)]; // checkbox -> off or on
-          enabled = (bool)(str!="off"); // off is guaranteed to be present
-        }
-        segment_delay_ms = min(10000,max(10,staircase[FPSTR(_segmentDelay)].as<int>()));  // max delay 10s
-        on_time_ms = min(900,max(10,staircase[FPSTR(_onTime)].as<int>())) * 1000;    // min 10s, max 15min
-
-        if (staircase[FPSTR(_useTopUltrasoundSensor)].is<bool>()) {
-          useUSSensorTop = staircase[FPSTR(_useTopUltrasoundSensor)].as<bool>();
-        } else {
-          String str = staircase[FPSTR(_useTopUltrasoundSensor)]; // checkbox -> off or on
-          useUSSensorTop = (bool)(str!="off"); // off is guaranteed to be present
-        }
-
-        topPIRorTriggerPin = min(39,max(-1,staircase[FPSTR(_topPIRorTrigger_pin)].as<int>()));
-        topEchoPin         = min(39,max(-1,staircase[FPSTR(_topEcho_pin)].as<int>()));
-
-        if (staircase[FPSTR(_useBottomUltrasoundSensor)].is<bool>()) {
-          useUSSensorBottom = staircase[FPSTR(_useBottomUltrasoundSensor)].as<bool>();
-        } else {
-          String str = staircase[FPSTR(_useBottomUltrasoundSensor)]; // checkbox -> off or on
-          useUSSensorBottom = (bool)(str!="off"); // off is guaranteed to be present
-        }
-        bottomPIRorTriggerPin = min(39,max(-1,staircase[FPSTR(_bottomPIRorTrigger_pin)].as<int>()));
-        bottomEchoPin         = min(39,max(-1,staircase[FPSTR(_bottomEcho_pin)].as<int>()));
-        topMaxDist            = min(150,max(30,staircase[FPSTR(_topEchoCm)].as<int>()));     // max distnace ~1.5m (a lag of 9ms may be expected)
-        bottomMaxDist         = min(150,max(30,staircase[FPSTR(_bottomEchoCm)].as<int>()));  // max distance ~1.5m (a lag of 9ms may be expected)
-      } else {
-        DEBUG_PRINTLN(F("No config found. (Using defaults.)"));
+      JsonObject top = root[FPSTR(_name)];
+      if (top.isNull()) {
+        DEBUG_PRINT(FPSTR(_name));
+        DEBUG_PRINTLN(F(": No config found. (Using defaults.)"));
+        return false;
       }
+
+      enabled   = top[FPSTR(_enabled)] | enabled;
+
+      segment_delay_ms = top[FPSTR(_segmentDelay)] | segment_delay_ms;
+      segment_delay_ms = (unsigned long) min((unsigned long)10000,max((unsigned long)10,(unsigned long)segment_delay_ms));  // max delay 10s
+
+      on_time_ms = top[FPSTR(_onTime)] | on_time_ms/1000;
+      on_time_ms = min(900,max(10,(int)on_time_ms)) * 1000; // min 10s, max 15min
+
+      useUSSensorTop     = top[FPSTR(_useTopUltrasoundSensor)] | useUSSensorTop;
+      topPIRorTriggerPin = top[FPSTR(_topPIRorTrigger_pin)] | topPIRorTriggerPin;
+      topEchoPin         = top[FPSTR(_topEcho_pin)] | topEchoPin;
+
+      useUSSensorBottom     = top[FPSTR(_useBottomUltrasoundSensor)] | useUSSensorBottom;
+      bottomPIRorTriggerPin = top[FPSTR(_bottomPIRorTrigger_pin)] | bottomPIRorTriggerPin;
+      bottomEchoPin         = top[FPSTR(_bottomEcho_pin)] | bottomEchoPin;
+
+      topMaxDist    = top[FPSTR(_topEchoCm)] | topMaxDist;
+      topMaxDist    = min(150,max(30,(int)topMaxDist));     // max distnace ~1.5m (a lag of 9ms may be expected)
+      bottomMaxDist = top[FPSTR(_bottomEchoCm)] | bottomMaxDist;
+      bottomMaxDist = min(150,max(30,(int)bottomMaxDist));  // max distance ~1.5m (a lag of 9ms may be expected)
+
+      DEBUG_PRINT(FPSTR(_name));
       if (!initDone) {
         // first run: reading from cfg.json
-        DEBUG_PRINTLN(F("Staircase config loaded."));
+        DEBUG_PRINTLN(F(" config loaded."));
       } else {
-        // changing paramters from settings page
-        DEBUG_PRINTLN(F("Staircase config (re)loaded."));
+        // changing parameters from settings page
+        DEBUG_PRINTLN(F(" config (re)loaded."));
         bool changed = false;
         if ((oldUseUSSensorTop != useUSSensorTop) ||
             (oldUseUSSensorBottom != useUSSensorBottom) ||
@@ -483,13 +484,15 @@ class Animated_Staircase : public Usermod {
             (oldBottomAPin != bottomPIRorTriggerPin) ||
             (oldBottomBPin != bottomEchoPin)) {
           changed = true;
-          pinManager.deallocatePin(oldTopAPin);
-          pinManager.deallocatePin(oldTopBPin);
-          pinManager.deallocatePin(oldBottomAPin);
-          pinManager.deallocatePin(oldBottomBPin);
+          pinManager.deallocatePin(oldTopAPin, PinOwner::UM_AnimatedStaircase);
+          pinManager.deallocatePin(oldTopBPin, PinOwner::UM_AnimatedStaircase);
+          pinManager.deallocatePin(oldBottomAPin, PinOwner::UM_AnimatedStaircase);
+          pinManager.deallocatePin(oldBottomBPin, PinOwner::UM_AnimatedStaircase);
         }
         if (changed) setup();
       }
+      // use "return !top["newestParameter"].isNull();" when updating Usermod with new features
+      return true;
     }
 
     /*
@@ -505,10 +508,10 @@ class Animated_Staircase : public Usermod {
       JsonArray usermodEnabled = staircase.createNestedArray(F("Staircase"));  // name
       String btn = F("<button class=\"btn infobtn\" onclick=\"requestJson({staircase:{enabled:");
       if (enabled) {
-        btn += F("false}},false,false);loadInfo();\">");
+        btn += F("false}});\">");
         btn += F("enabled");
       } else {
-        btn += F("true}},false,false);loadInfo();\">");
+        btn += F("true}});\">");
         btn += F("disabled");
       }
       btn += F("</button>");

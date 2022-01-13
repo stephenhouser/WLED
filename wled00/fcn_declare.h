@@ -32,6 +32,27 @@ bool deserializeConfigSec();
 void serializeConfig();
 void serializeConfigSec();
 
+template<typename DestType>
+bool getJsonValue(const JsonVariant& element, DestType& destination) {
+  if (element.isNull()) {
+    return false;
+  }
+
+  destination = element.as<DestType>();
+  return true;
+}
+
+template<typename DestType, typename DefaultType>
+bool getJsonValue(const JsonVariant& element, DestType& destination, const DefaultType defaultValue) {
+  if(!getJsonValue(element, destination)) {
+    destination = defaultValue;
+    return false;
+  }
+
+  return true;
+}
+
+
 //colors.cpp
 void colorFromUint32(uint32_t in, bool secondary = false);
 void colorFromUint24(uint32_t in, bool secondary = false);
@@ -46,7 +67,9 @@ void colorRGBtoXY(byte* rgb, float* xy); // only defined if huesync disabled TOD
 
 void colorFromDecOrHexString(byte* rgb, char* in);
 bool colorFromHexString(byte* rgb, const char* in);
-void colorRGBtoRGBW(byte* rgb); //rgb to rgbw (http://codewelt.com/rgbw). (RGBW_MODE_LEGACY)
+
+uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);
+uint16_t approximateKelvinFromRGB(uint32_t rgb);
 
 //dmx.cpp
 void initDMX();
@@ -72,6 +95,12 @@ void onHueConnect(void* arg, AsyncClient* client);
 void sendHuePoll();
 void onHueData(void* arg, AsyncClient* client, void *data, size_t len);
 
+//improv.cpp
+void handleImprovPacket();
+void sendImprovStateResponse(uint8_t state, bool error = false);
+void sendImprovInfoResponse();
+void sendImprovRPCResponse(uint8_t commandId);
+
 //ir.cpp
 bool decodeIRCustom(uint32_t code);
 void applyRepeatActions();
@@ -87,6 +116,7 @@ void decodeIR44(uint32_t code);
 void decodeIR21(uint32_t code);
 void decodeIR6(uint32_t code);
 void decodeIR9(uint32_t code);
+void decodeIRJson(uint32_t code);
 
 void initIR();
 void handleIR();
@@ -98,7 +128,7 @@ void handleIR();
 #include "FX.h"
 
 void deserializeSegment(JsonObject elem, byte it, byte presetId = 0);
-bool deserializeState(JsonObject root, byte presetId = 0);
+bool deserializeState(JsonObject root, byte callMode = CALL_MODE_DIRECT_CHANGE, byte presetId = 0);
 void serializeSegment(JsonObject& root, WS2812FX::Segment& seg, byte id, bool forPreset = false, bool segmentBounds = true);
 void serializeState(JsonObject root, bool forPreset = false, bool includeBri = true, bool segmentBounds = true);
 void serializeInfo(JsonObject root);
@@ -155,11 +185,11 @@ void _drawOverlayCronixie();
 //playlist.cpp
 void shufflePlaylist();
 void unloadPlaylist();
-void loadPlaylist(JsonObject playlistObject, byte presetId = 0);
+int16_t loadPlaylist(JsonObject playlistObject, byte presetId = 0);
 void handlePlaylist();
 
 //presets.cpp
-bool applyPreset(byte index);
+bool applyPreset(byte index, byte callMode = CALL_MODE_DIRECT_CHANGE);
 void savePreset(byte index, bool persist = true, const char* pname = nullptr, JsonObject saveobj = JsonObject());
 void deletePreset(byte index);
 
@@ -169,27 +199,42 @@ bool isAsterisksOnly(const char* str, byte maxLen);
 void handleSettingsSet(AsyncWebServerRequest *request, byte subPage);
 bool handleSet(AsyncWebServerRequest *request, const String& req, bool apply=true);
 int getNumVal(const String* req, uint16_t pos);
+void parseNumber(const char* str, byte* val, byte minv=0, byte maxv=255);
 bool updateVal(const String* req, const char* key, byte* val, byte minv=0, byte maxv=255);
 
 //udp.cpp
 void notify(byte callMode, bool followUp=false);
+uint8_t realtimeBroadcast(uint8_t type, IPAddress client, uint16_t length, byte *buffer, uint8_t bri=255, bool isRGBW=false);
 void realtimeLock(uint32_t timeoutMs, byte md = REALTIME_MODE_GENERIC);
 void handleNotifications();
 void setRealtimePixel(uint16_t i, byte r, byte g, byte b, byte w);
 void refreshNodeList();
 void sendSysInfoUDP();
 
+//util.cpp
+//bool oappend(const char* txt); // append new c string to temp buffer efficiently
+//bool oappendi(int i);          // append new number to temp buffer efficiently
+//void sappend(char stype, const char* key, int val);
+//void sappends(char stype, const char* key, char* val);
+//void prepareHostname(char* hostname);
+//void _setRandomColor(bool _sec, bool fromButton);
+//bool isAsterisksOnly(const char* str, byte maxLen);
+bool requestJSONBufferLock(uint8_t module=255);
+void releaseJSONBufferLock();
+
 //um_manager.cpp
 class Usermod {
   public:
     virtual void loop() {}
+    virtual void handleOverlayDraw() {}
+    virtual bool handleButton(uint8_t b) { return false; }
     virtual void setup() {}
     virtual void connected() {}
     virtual void addToJsonState(JsonObject& obj) {}
     virtual void addToJsonInfo(JsonObject& obj) {}
     virtual void readFromJsonState(JsonObject& obj) {}
     virtual void addToConfig(JsonObject& obj) {}
-    virtual void readFromConfig(JsonObject& obj) {}
+    virtual bool readFromConfig(JsonObject& obj) { return true; } // Note as of 2021-06 readFromConfig() now needs to return a bool, see usermod_v2_example.h
     virtual void onMqttConnect(bool sessionPresent) {}
     virtual bool onMqttMessage(char* topic, char* payload) { return false; }
     virtual uint16_t getId() {return USERMOD_ID_UNSPECIFIED;}
@@ -202,16 +247,15 @@ class UsermodManager {
 
   public:
     void loop();
-
+    void handleOverlayDraw();
+    bool handleButton(uint8_t b);
     void setup();
     void connected();
-
     void addToJsonState(JsonObject& obj);
     void addToJsonInfo(JsonObject& obj);
     void readFromJsonState(JsonObject& obj);
-
     void addToConfig(JsonObject& obj);
-    void readFromConfig(JsonObject& obj);
+    bool readFromConfig(JsonObject& obj);
     void onMqttConnect(bool sessionPresent);
     bool onMqttMessage(char* topic, char* payload);
     bool add(Usermod* um);

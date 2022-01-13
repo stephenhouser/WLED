@@ -9,7 +9,12 @@
  * || || ||
  * \/ \/ \/
  */
-//#include "usermod_v2_example.h"
+//#include "../usermods/EXAMPLE_v2/usermod_v2_example.h"
+
+#ifdef USERMOD_BATTERY_STATUS_BASIC
+#include "../usermods/battery_status_basic/usermod_v2_battery_status_basic.h"
+#endif
+
 #ifdef USERMOD_DALLASTEMPERATURE
 #include "../usermods/Temperature/usermod_temperature.h"
 #endif
@@ -18,7 +23,9 @@
 #include "../usermods/SN_Photoresistor/usermod_sn_photoresistor.h"
 #endif
 
-//#include "usermod_v2_empty.h"
+#ifdef USERMOD_PWM_FAN
+#include "../usermods/PWM_fan/usermod_PWM_fan.h"
+#endif
 
 #ifdef USERMOD_BUZZER
 #include "../usermods/buzzer/usermod_v2_buzzer.h"
@@ -39,10 +46,18 @@
 #include "../usermods/BME280_v2/usermod_bme280.h"
 #endif
 #ifdef USERMOD_FOUR_LINE_DISPLAY
-#include "../usermods/usermod_v2_four_line_display/usermod_v2_four_line_display.h"
+  #ifdef USE_ALT_DISPlAY
+    #include "../usermods/usermod_v2_four_line_display_ALT/usermod_v2_four_line_display_ALT.h"
+  #else 
+    #include "../usermods/usermod_v2_four_line_display/usermod_v2_four_line_display.h"
+  #endif
 #endif
 #ifdef USERMOD_ROTARY_ENCODER_UI
-#include "../usermods/usermod_v2_rotary_encoder_ui/usermod_v2_rotary_encoder_ui.h"
+  #ifdef USE_ALT_DISPlAY
+    #include "../usermods/usermod_v2_rotary_encoder_ui_ALT/usermod_v2_rotary_encoder_ui_ALT.h"
+  #else
+    #include "../usermods/usermod_v2_rotary_encoder_ui/usermod_v2_rotary_encoder_ui.h"
+  #endif
 #endif
 #ifdef USERMOD_AUTO_SAVE
 #include "../usermods/usermod_v2_auto_save/usermod_v2_auto_save.h"
@@ -86,6 +101,10 @@ void registerUsermods()
    */
   //usermods.add(new MyExampleUsermod());
 
+  #ifdef USERMOD_BATTERY_STATUS_BASIC
+  usermods.add(new UsermodBatteryBasic());
+  #endif
+
   #ifdef USERMOD_DALLASTEMPERATURE
   usermods.add(new UsermodTemperature());
   #endif
@@ -94,7 +113,9 @@ void registerUsermods()
   usermods.add(new Usermod_SN_Photoresistor());
   #endif
 
-  //usermods.add(new UsermodRenameMe());
+  #ifdef USERMOD_PWM_FAN
+  usermods.add(new PWMFanUsermod());
+  #endif
 
   #ifdef USERMOD_BUZZER
   usermods.add(new BuzzerUsermod());
@@ -147,7 +168,28 @@ void registerUsermods()
   usermods.add(new ElekstubeIPSUsermod());
   #endif
 
+<<<<<<< HEAD
   #ifdef USERMOD_ROTARY_CONTROL
   usermods.add(new RotaryControl());
+=======
+  #ifdef USERMOD_ROTARY_ENCODER_BRIGHTNESS_COLOR
+  usermods.add(new RotaryEncoderBrightnessColor());
+  #endif
+
+  #ifdef RGB_ROTARY_ENCODER
+  usermods.add(new RgbRotaryEncoderUsermod());
+  #endif
+
+  #ifdef USERMOD_SEVEN_SEGMENT
+  usermods.add(new SevenSegmentDisplay());
+  #endif
+
+  #ifdef USERMOD_SSDR
+  usermods.add(new UsermodSSDR());
+  #endif
+
+  #ifdef QUINLED_AN_PENTA
+  usermods.add(new QuinLEDAnPentaUsermod());
+>>>>>>> upstream/master
   #endif
 }

@@ -53,16 +53,16 @@ void unloadPlaylist() {
 }
 
 
-void loadPlaylist(JsonObject playlistObj, byte presetId) {
+int16_t loadPlaylist(JsonObject playlistObj, byte presetId) {
   unloadPlaylist();
   
   JsonArray presets = playlistObj["ps"];
   playlistLen = presets.size();
-  if (playlistLen == 0) return;
+  if (playlistLen == 0) return -1;
   if (playlistLen > 100) playlistLen = 100;
 
   playlistEntries = new PlaylistEntry[playlistLen];
-  if (playlistEntries == nullptr) return;
+  if (playlistEntries == nullptr) return -1;
 
   byte it = 0;
   for (int ps : presets) {
@@ -107,17 +107,20 @@ void loadPlaylist(JsonObject playlistObj, byte presetId) {
 
   playlistRepeat = rep;
   if (playlistRepeat > 0) playlistRepeat++; //add one extra repetition immediately since it will be deducted on first start
-  playlistEndPreset = playlistObj[F("end")] | 0;
+  playlistEndPreset = playlistObj["end"] | 0;
   shuffle = shuffle || playlistObj["r"];
   if (shuffle) playlistOptions += PL_OPTION_SHUFFLE;
 
   currentPlaylist = presetId;
   DEBUG_PRINTLN(F("Playlist loaded."));
+  return currentPlaylist;
 }
 
 
 void handlePlaylist() {
-  if (currentPlaylist < 0 || playlistEntries == nullptr || presetCyclingEnabled) return;
+  static unsigned long presetCycledTime = 0;
+  // if fileDoc is not null JSON buffer is in use so just quit
+  if (currentPlaylist < 0 || playlistEntries == nullptr || fileDoc != nullptr) return;
 
   if (millis() - presetCycledTime > (100*playlistEntryDur)) {
     presetCycledTime = millis();
