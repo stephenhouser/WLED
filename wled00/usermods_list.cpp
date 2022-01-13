@@ -168,28 +168,7 @@ void registerUsermods()
   usermods.add(new ElekstubeIPSUsermod());
   #endif
 
-<<<<<<< HEAD
   #ifdef USERMOD_ROTARY_CONTROL
   usermods.add(new RotaryControl());
-=======
-  #ifdef USERMOD_ROTARY_ENCODER_BRIGHTNESS_COLOR
-  usermods.add(new RotaryEncoderBrightnessColor());
-  #endif
-
-  #ifdef RGB_ROTARY_ENCODER
-  usermods.add(new RgbRotaryEncoderUsermod());
-  #endif
-
-  #ifdef USERMOD_SEVEN_SEGMENT
-  usermods.add(new SevenSegmentDisplay());
-  #endif
-
-  #ifdef USERMOD_SSDR
-  usermods.add(new UsermodSSDR());
-  #endif
-
-  #ifdef QUINLED_AN_PENTA
-  usermods.add(new QuinLEDAnPentaUsermod());
->>>>>>> upstream/master
   #endif
 }
